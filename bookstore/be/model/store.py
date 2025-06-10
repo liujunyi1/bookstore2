@@ -61,10 +61,10 @@ class Store:
                 CREATE TABLE IF NOT EXISTS user_store(
                     user_id TEXT, 
                     store_id TEXT, 
-                    PRIMARY KEY(store_id)
+                    PRIMARY KEY(user_id, store_id)
                 )
                 """)
-                
+
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS store(
                     store_id TEXT, 
@@ -75,8 +75,6 @@ class Store:
                     PRIMARY KEY(store_id, book_id)
                 )
                 """)
-                
-                
 
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS new_order(
@@ -88,25 +86,6 @@ class Store:
                 price INT
                 )
                 """)
-                cursor.execute("""CREATE INDEX IF NOT EXISTS idx_status_time ON new_order (status, time)""")
-                ##增加user_id索引
-                cursor.execute("""CREATE INDEX IF NOT EXISTS idx_user_id ON new_order (user_id)""")
-                ##增加store_id索引
-                cursor.execute("""CREATE INDEX IF NOT EXISTS idx_store_id ON new_order (store_id)""")
-
-                
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS dead_order(
-                order_id TEXT PRIMARY KEY,
-                user_id TEXT,
-                store_id TEXT,
-                status CHAR(20),
-                time TIMESTAMP,
-                price INT
-                )
-                """)
-                
-
 
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS new_order_detail(
@@ -117,17 +96,7 @@ class Store:
                     PRIMARY KEY(order_id, book_id)
                 )
                 """)
-                
 
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS dead_order_detail(
-                    order_id TEXT, 
-                    book_id TEXT, 
-                    count INT, 
-                    price INT,
-                    PRIMARY KEY(order_id, book_id)
-                )
-                """)
                 conn.commit()
         except psycopg2.Error as e:
             logging.error(f"PostgreSQL error: {e}")

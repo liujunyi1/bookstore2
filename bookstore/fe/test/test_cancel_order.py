@@ -70,5 +70,5 @@ class TestPayment:
         code = self.buyer.cancel_order(order_id)
         assert code == 200
         code = self.buyer.cancel_order(order_id)
-        assert code != 200 #重复取消是否会报错
+        assert code == 520 #重复取消是否会报错
 
