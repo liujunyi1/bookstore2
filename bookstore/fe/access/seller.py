@@ -37,6 +37,17 @@ class Seller:
         headers = {"token": self.token}
         r = requests.post(url, headers=headers, json=json)
         return r.status_code
+    def send_order(self, store_id: str, order_id: str) -> int:
+        json = {
+            "user_id": self.seller_id,
+            "store_id": store_id,
+            "order_id": order_id,
+        }
+        # print(simplejson.dumps(json))
+        url = urljoin(self.url_prefix, "send_order")
+        headers = {"token": self.token}
+        r = requests.post(url, headers=headers, json=json)
+        return r.status_code
 
     def add_stock_level(
         self, seller_id: str, store_id: str, book_id: str, add_stock_num: int
