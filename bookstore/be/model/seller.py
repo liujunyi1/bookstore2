@@ -102,7 +102,7 @@ class Seller(db_conn.DBConn):
             
             with self.conn.cursor() as cur:
                 #查看这个订单的状态以及店铺
-                cur.execute('SELECT status,store_id FROM new_order WHERE order_id = %s FOR UPDATE' , (order_id,))
+                cur.execute('SELECT status,store_id FROM new_order WHERE order_id = %s', (order_id,))
                 #result = cur.fetchone()
                 if cur.rowcount == 0:
                     return error.error_invalid_order_id(order_id)
