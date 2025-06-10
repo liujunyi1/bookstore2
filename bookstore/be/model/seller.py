@@ -92,3 +92,33 @@ class Seller(db_conn.DBConn):
             self.conn.rollback()
             return 530, f"{str(e)}"
         return 200, "ok"
+    
+    def send_order(self, user_id: str, store_id: str, order_id: str) -> (int, str): 
+        try:
+            if not self.user_id_exist(user_id):
+                return error.error_non_exist_user_id(user_id)
+            if not self.store_id_exist(store_id):
+                return error.error_non_exist_store_id(store_id)
+            
+            with self.conn.cursor() as cur:
+                #查看这个订单的状态以及店铺
+                cur.execute('SELECT status,store_id FROM new_order WHERE order_id = %s', (order_id,))
+                #result = cur.fetchone()
+                if cur.rowcount == 0:
+                    return error.error_invalid_order_id(order_id)
+                result = cur.fetchone()
+                if result[0].strip() != 'paid':
+                    #print(result[0],'paid',"^^^^^^^^^^^^^^^^^^^")
+                    return error.error_invalid_order_status(order_id)
+                #修改这个订单的状态
+                cur.execute('UPDATE new_order SET status = %s WHERE order_id = %s', ('sent', order_id))
+                self.conn.commit()
+        except psycopg2.Error as e:
+            self.conn.rollback()
+            return 528, f"{str(e)}"
+        except BaseException as e:
+            self.conn.rollback()
+            return 530, f"{str(e)}"
+        return 200, "ok"
+                
+                 

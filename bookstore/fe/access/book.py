@@ -22,7 +22,7 @@ class Book:
     author_intro: str
     book_intro: str
     content: str
-    #tags: [str]
+    tags: [str]
     #pictures: [bytes]
 
     #def __init__(self):
@@ -62,7 +62,7 @@ class BookDB:
                            translator, pub_year, pages, 
                            price, currency_unit, binding, 
                            isbn, author_intro, book_intro, 
-                           content 
+                           content,tag
                     FROM book 
                     ORDER BY id 
                     LIMIT %s OFFSET %s
@@ -88,7 +88,7 @@ class BookDB:
                     book.content = row[14]
                     
                     # 注意：原代码中的tags和picture变量未定义，这里暂时注释掉
-                    # tags = row[15]
+                    book.tags = row[15]
                     # picture = row[16]
                     
                     # for tag in tags.split("\n"):
