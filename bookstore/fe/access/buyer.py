@@ -63,7 +63,8 @@ class Buyer:
         r = requests.post(url, headers=headers, json=json)
         return r.status_code
     
-    def get_order_status(self,store_id: None,order_id:None,status:None) -> (int, [(str,str,str,str,datetime,int)]):
+    def get_order_status(self,store_id: None,order_id:None,status:None) -> (int, [[str,str,str,str,str,int]]):
+         
         json = {
             "user_id": self.user_id, 
             "store_id": store_id,
@@ -85,4 +86,35 @@ class Buyer:
         url = urljoin(self.url_prefix, "add_funds")
         headers = {"token": self.token}
         r = requests.post(url, headers=headers, json=json)
-        return r.status_code
+        return r.status_code 
+
+    def search_book(self,page_no=None,page_size=None,
+        fuzzy_title=None,req_tags=None,book_id=None,
+        isbn=None,author=None,lowest_price=None,highest_price=None,lowest_pub_year=None,
+        highest_pub_year=None,store_id=None,publisher=None,translator=None,binding=None,
+        order_by_method=None,having_stock=None):
+        json = {
+            "page_no": page_no,
+            "page_size": page_size,
+            "fuzzy_title": fuzzy_title,
+            "req_tags": req_tags,
+            "book_id": book_id,
+            "isbn": isbn,
+            "author": author,
+            "lowest_price": lowest_price,
+            "highest_price": highest_price,
+            "lowest_pub_year": lowest_pub_year,
+            "highest_pub_year": highest_pub_year,
+            "store_id": store_id,
+            "publisher": publisher,
+            "translator": translator,
+            "binding": binding,
+            "order_by_method": order_by_method,
+            "having_stock": having_stock,
+        }
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(json)
+        url = urljoin(self.url_prefix, "search_book")
+        headers = {"token": self.token}
+        r = requests.post(url, headers=headers, json=json)
+        return r.status_code, r.json()

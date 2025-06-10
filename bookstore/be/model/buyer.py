@@ -184,8 +184,30 @@ class Buyer(db_conn.DBConn):
                 #print(row[0],'sent')
                 return error.error_invalid_order_status(order_id)
             ## 更改订单状态
+            
             cursor.execute(
                 "UPDATE new_order SET status = 'completed' WHERE order_id = %s",
+                (order_id,),
+            )
+            #将订单状态和订单详细信息移入dead_order表
+            
+            cursor.execute(
+                "INSERT INTO dead_order (order_id, store_id, user_id, status, time, price) "
+                "SELECT order_id, store_id, user_id, status, time, price FROM new_order WHERE order_id = %s",
+                (order_id,),
+            )
+            cursor.execute(
+                "INSERT INTO dead_order_detail (order_id, book_id, count, price) "
+                "SELECT order_id, book_id, count, price FROM new_order_detail WHERE order_id = %s",
+                (order_id,),
+            )
+            #删除相关的信息
+            cursor.execute(
+                "DELETE FROM new_order_detail WHERE order_id = %s",
+                (order_id,),
+            )
+            cursor.execute(
+                "DELETE FROM new_order WHERE order_id = %s",
                 (order_id,),
             )
             conn.commit()
@@ -201,7 +223,7 @@ class Buyer(db_conn.DBConn):
         try:
             cursor = conn.cursor()
             ## 查询订单的状态
-            cursor.execute("SELECT status,price,store_id,user_id FROM new_order WHERE order_id = %s", (order_id,))
+            cursor.execute("SELECT status,price,store_id,user_id FROM new_order WHERE order_id = %s FOR UPDATE", (order_id,))
             if cursor.rowcount == 0:
                 return error.error_invalid_order_id(order_id)
             row = cursor.fetchone()
@@ -255,14 +277,84 @@ class Buyer(db_conn.DBConn):
             if cursor.rowcount == 0:
                 return error.error_non_exist_user_id(seller_id)
             # 回滚库存 
+            #更新订单状态
+            cursor.execute(
+                "UPDATE new_order SET status = 'cancelled' WHERE order_id = %s",
+                (order_id,),
+            )
+            # 将订单状态和订单详细信息移入dead_order表
+            cursor.execute(
+                "INSERT INTO dead_order (order_id, store_id, user_id, status, time, price) "
+                "SELECT order_id, store_id, user_id, status, time, price FROM new_order WHERE order_id = %s",
+                (order_id,),
+            )
+            cursor.execute(
+                "INSERT INTO dead_order_detail (order_id, book_id, count, price) "
+                "SELECT order_id, book_id, count, price FROM new_order_detail WHERE order_id = %s",
+                (order_id,),
+            )
+            #删除相关的信息
+            cursor.execute(
+                "DELETE FROM new_order_detail WHERE order_id = %s",
+                (order_id,),
+            )
+            cursor.execute(
+                "DELETE FROM new_order WHERE order_id = %s",
+                (order_id,),
+            )
             conn.commit()
         except psycopg2.Error as e:
             print(str(e))
             return 528, "{}".format(str(e))
         except BaseException as e:
             return 530, "{}".format(str(e))
+        return 200, "ok"
+ 
 
-        return 200, "ok" 
+    def get_order_status(self, user_id: str,store_id: None,order_id:None,status:None) ->(int,str,[[str,str,str,str,str,int]]):
+        # 查找所有满足条件的订单的列表
+        conn = self.conn
+        cursor = conn.cursor()
+        query = "SELECT order_id, store_id, user_id, status, time, price FROM new_order"
+        conditions = ["user_id = %s"]  # 直接在SQL中过滤用户ID
+        params = [user_id]
+        
+        if store_id is not None:
+            conditions.append("store_id = %s")
+            params.append(store_id)
+        if order_id is not None:
+            conditions.append("order_id = %s")
+            params.append(order_id)
+        if status is not None:
+            conditions.append("status = %s")
+            params.append(status)
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        order_list = []
+        
+        for row in rows:
+            order_id, store_id, user_id, status, time, price = row 
+            # 将time转化为str格式
+            time_str = str(time)
+            order_list.append([order_id, store_id, user_id, status, time_str, price])
+        
+        #对dead_order表进行查询
+        query="SELECT order_id, store_id, user_id, status, time, price FROM dead_order"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        for row in rows:
+            order_id, store_id, user_id, status, time, price = row
+            # 将time转化为str格式
+            time_str = str(time)
+            order_list.append([order_id, store_id, user_id, status, time_str, price])
+
+        return 200, "ok", order_list
 
 
 
