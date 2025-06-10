@@ -15,9 +15,7 @@ def new_order():
     for book in books:
         book_id = book.get("id")
         count = book.get("count")
-        id_and_count.append((book_id, count))
-    print("#############################")
-    print(user_id, store_id, id_and_count)
+        id_and_count.append((book_id, count)) 
     b = Buyer()
     code, message, order_id = b.new_order(user_id, store_id, id_and_count)
     return jsonify({"message": message, "order_id": order_id}), code
@@ -32,14 +30,44 @@ def payment():
     code, message = b.payment(user_id, password, order_id)
     return jsonify({"message": message}), code
 
+@bp_buyer.route("/receive_order", methods=["POST"])
+def receive_order():
+    user_id: str = request.json.get("user_id")
+    password: str = request.json.get("password")
+    order_id: str = request.json.get("order_id")
+    b = Buyer()
+    code, message = b.receive_order(user_id, password, order_id)
+    return jsonify({"message": message}), code
+
+#取消订单
+@bp_buyer.route("/cancel_order", methods=["POST"])
+def cancel_order():
+    user_id: str = request.json.get("user_id")
+    password: str = request.json.get("password")
+    order_id: str = request.json.get("order_id")
+    b = Buyer()
+    code, message = b.cancel_order(user_id, password, order_id)
+    return jsonify({"message": message}), code
+
+#询问订单状态
+@bp_buyer.route("/get_order_status", methods=["POST"])
+def get_order_status():
+    user_id: str = request.json.get("user_id")
+    #如果order
+    store_id: str = request.json.get("store_id", None)
+    order_id: str = request.json.get("order_id", None)
+    status: str = request.json.get("status", None)
+    b = Buyer()
+    code, message, order_status = b.get_order_status(user_id, store_id, order_id, status)
+    return jsonify({"message": message}), code, order_status
+        
+
 
 @bp_buyer.route("/add_funds", methods=["POST"])
 def add_funds():
     user_id = request.json.get("user_id")
     password = request.json.get("password")
-    add_value = request.json.get("add_value")
-    print("%%%%%%%%%%%%%%%%%%%%%%")
-    print(user_id, password, add_value)
+    add_value = request.json.get("add_value") 
     b = Buyer()
     code, message = b.add_funds(user_id, password, add_value)
     return jsonify({"message": message}), code

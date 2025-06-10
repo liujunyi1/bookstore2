@@ -30,15 +30,12 @@ class Buyer(db_conn.DBConn):
             with self.conn:  # 开启事务
                 with self.conn.cursor() as cursor:
                     for book_id, count in id_and_count:
-                        # 检查书籍存在性和库存
-                        print("######################")
-                        print(book_id, count)
+                        # 检查书籍存在性和库存 
                         cursor.execute(
                             "SELECT stock_level, price FROM store "
                             "WHERE store_id = %s AND book_id = %s;",  
                             (store_id, book_id)
-                        )
-                        print("okkkkkkkkkkkkkkkkkkkkk")
+                        ) 
                         row = cursor.fetchone()
                         if not row:
                             return error.error_non_exist_book_id(book_id) + (order_id,)
@@ -49,10 +46,10 @@ class Buyer(db_conn.DBConn):
                         
                         # 扣减库存（使用带条件的UPDATE避免超卖）
                         cursor.execute(
-                            "UPDATE store SET stock_level = stock_level - %s "
+                            "UPDATE store SET stock_level = stock_level - %s,sale_count = sale_count + %s "
                             "WHERE store_id = %s AND book_id = %s AND stock_level >= %s "
                             "RETURNING store_id;",
-                            (count, store_id, book_id, count)
+                            (count,count,store_id, book_id, count)
                         )
                         if cursor.rowcount == 0:
                             return error.error_stock_level_low(book_id) + (order_id,)
@@ -69,6 +66,7 @@ class Buyer(db_conn.DBConn):
                     # 记录订单主表
                     #timestamp = datetime.fromtimestamp(time.time())
                     timestamp = datetime.datetime.now() 
+                     
                     cursor.execute(
                         "INSERT INTO new_order (order_id, store_id, user_id, status, time, price) "
                         "VALUES (%s, %s, %s, %s, %s, %s);",
@@ -93,7 +91,7 @@ class Buyer(db_conn.DBConn):
         try:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT order_id, user_id, store_id,price FROM new_order WHERE order_id = %s",
+                "SELECT order_id, user_id, store_id,price, status FROM new_order WHERE order_id = %s",
                 (order_id,),
             )
             row = cursor.fetchone()
@@ -104,6 +102,10 @@ class Buyer(db_conn.DBConn):
             buyer_id = row[1]
             store_id = row[2]
             price = row[3]
+            status= row[4]
+
+            if status.strip() != "unpaid":
+                return error.error_invalid_order_status(order_id)
 
             if buyer_id != user_id:
                 return error.error_authorization_fail()
@@ -154,22 +156,11 @@ class Buyer(db_conn.DBConn):
                 "RETURNING user_id;",
                 (total_price, seller_id),
             )
-
+            
             if cursor.rowcount == 0:
                 return error.error_non_exist_user_id(seller_id)
-
-            cursor.execute(
-                "DELETE FROM new_order WHERE order_id = %s", (order_id,)
-            )
-            if cursor.rowcount == 0:
-                return error.error_invalid_order_id(order_id)
-
-            cursor.execute(
-                "DELETE FROM new_order_detail where order_id = %s", (order_id,)
-            )
-            if cursor.rowcount == 0:
-                return error.error_invalid_order_id(order_id)
-
+            #将订单状态改为paid
+            cursor.execute("UPDATE new_order SET status = 'paid' WHERE order_id = %s", (order_id,))
             conn.commit()
 
         except psycopg2.Error as e:
@@ -180,26 +171,117 @@ class Buyer(db_conn.DBConn):
 
         return 200, "ok"
 
+    def receive_order(self, user_id: str, password: str, order_id: str) -> (int, str):
+        conn = self.conn
+        try:
+            cursor = conn.cursor()
+            ## 查询订单的状态
+            cursor.execute("SELECT status FROM new_order WHERE order_id = %s", (order_id,))
+            if cursor.rowcount == 0:
+                return error.error_invalid_order_id(order_id)
+            row = cursor.fetchone()
+            if row[0].strip() != "sent":
+                #print(row[0],'sent')
+                return error.error_invalid_order_status(order_id)
+            ## 更改订单状态
+            cursor.execute(
+                "UPDATE new_order SET status = 'completed' WHERE order_id = %s",
+                (order_id,),
+            )
+            conn.commit()
+        except psycopg2.Error as e:
+            return 528, "{}".format(str(e))
+        except BaseException as e:
+            return 530, "{}".format(str(e))
+
+        return 200, "ok"
+    
+    def cancel_order(self, user_id: str, password: str, order_id: str) -> (int, str):
+        conn = self.conn
+        try:
+            cursor = conn.cursor()
+            ## 查询订单的状态
+            cursor.execute("SELECT status,price,store_id,user_id FROM new_order WHERE order_id = %s", (order_id,))
+            if cursor.rowcount == 0:
+                return error.error_invalid_order_id(order_id)
+            row = cursor.fetchone()
+            if row[0].strip() == "received" or row[0].strip() == "cancelled":
+                #print(row[0],'sent')
+                return error.error_invalid_order_status(order_id)
+            ## 更改订单状态
+            cursor.execute(
+                "UPDATE new_order SET status = 'cancelled' WHERE order_id = %s",
+                (order_id,),
+            )
+            status = row[0]
+            price = row[1]  
+            store_id = row[2]
+            buyer_id = row[3]
+            # 找到卖家的id
+            cursor.execute(
+                "SELECT user_id FROM user_store WHERE store_id = %s",
+                (store_id,),
+            )
+            seller_id = cursor.fetchone()[0]
+            # 给买家返还钱
+            if status.strip() != "unpaid":#如果订单状态不是unpaid，说明已经支付过了，需要更改钱
+                cursor.execute(
+                    "UPDATE users SET balance = balance + %s WHERE user_id = %s "
+                    "RETURNING user_id;",
+                    (price, buyer_id),
+                )
+                if cursor.rowcount == 0:
+                    return error.error_non_exist_user_id(buyer_id)
+                # 给卖家扣钱
+                cursor.execute(
+                    "UPDATE users SET balance = balance - %s WHERE user_id = %s "
+                    "RETURNING user_id;",
+                    (price, seller_id),
+                )
+                # 对库存进行更新
+            cursor.execute(
+                "SELECT book_id, count FROM new_order_detail WHERE order_id = %s",
+                (order_id,),
+            )
+            for row in cursor.fetchall():
+                book_id = row[0]
+                count = row[1]
+                cursor.execute(
+                    "UPDATE store SET stock_level = stock_level + %s,sale_count = sale_count - %s "
+                    "WHERE store_id = %s AND book_id = %s;",
+                    (count, count, store_id, book_id),
+                )
+            
+            if cursor.rowcount == 0:
+                return error.error_non_exist_user_id(seller_id)
+            # 回滚库存 
+            conn.commit()
+        except psycopg2.Error as e:
+            print(str(e))
+            return 528, "{}".format(str(e))
+        except BaseException as e:
+            return 530, "{}".format(str(e))
+
+        return 200, "ok" 
+
+
+
     def add_funds(self, user_id, password, add_value) -> (int, str):
         try:
             cursor = self.conn.cursor()
             cursor.execute(
                 "SELECT password from users where user_id=%s", (user_id,)
-            )
-            print("11111111111111")
+            ) 
             row = cursor.fetchone()
             if row is None:
-                return error.error_authorization_fail()
-            print("222222222222222")
+                return error.error_authorization_fail() 
             if row[0] != password:
-                return error.error_authorization_fail()
-            print("33333333333333333")
+                return error.error_authorization_fail() 
             cursor.execute(
                 "UPDATE users SET balance = balance + %s WHERE user_id = %s "
                 "RETURNING user_id;",
                 (add_value, user_id),
-            )
-            print("4444444444444444")
+            ) 
             if cursor.rowcount == 0:
                 return error.error_non_exist_user_id(user_id)
 
